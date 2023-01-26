@@ -9,4 +9,3 @@
     <title><?php echo $pageData['title'];?></title>
 </head>
 <body>
-<h1><?php echo $pageData['title'];?></h1>

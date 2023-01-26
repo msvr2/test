@@ -3,6 +3,7 @@ require_once ('conf.php');
 
 $controller = new Controller();
 
-if ($controller->verifyUser()) {
-    $controller->view($_REQUEST['page']);
+$user = $controller->verifyUser();
+if ($user['id']) {
+    $controller->view($_REQUEST['page'], $user);
 }
