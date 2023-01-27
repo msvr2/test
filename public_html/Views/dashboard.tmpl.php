@@ -9,6 +9,19 @@
                 <form action="/view.php?page=addPic" method="post">
                     <button class="btn btn-success">Добавить картинку</button><br>
                 </form>
+                <div class="row">
+                    <?php
+                        //var_dump($pageData);
+                        foreach ($pageData['pics'] as $pic) {
+                            echo '
+                                <div class="col-2 m-2 p-2">
+                                <img src="/picsmall.php?file='.$pic['path'].'">
+                                <p><a href="/view.php?page=picpage">Подробнее</a></p>
+                                </div>
+                            ';
+                        }
+                    ?>
+                </div>
             </div>
         </div>
     </div>

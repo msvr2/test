@@ -9,7 +9,7 @@
                     if ($pageData['success'])
                         echo '<div class="alert alert-success">'.$pageData['success'].'</div>';
                     if ($pageData['file'])
-                        echo '<img src="/Uploads/'.$pageData['file'].'" class="img-fluid">
+                        echo '<img src="/pic.php?file='.$pageData['file'].'" class="img-fluid">
                         <p><a href="/view.php?page=dashboard">Перейти к картинкам</a></p>';
                 ?>
             </div>
