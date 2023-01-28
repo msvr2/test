@@ -16,7 +16,8 @@
                             echo '
                                 <div class="col-2 m-2 p-2">
                                 <img src="/picsmall.php?file='.$pic['path'].'">
-                                <p><a href="/view.php?page=picpage">Подробнее</a></p>
+                                <p>Комментариев: '.$pic['comments'].'</p>
+                                <p><a href="/view.php?page=viewPic&id='.$pic['id'].'">Подробнее</a></p>
                                 </div>
                             ';
                         }

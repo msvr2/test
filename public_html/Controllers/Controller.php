@@ -59,7 +59,12 @@ Class Controller
     {
         $user = $this->getUser($_COOKIE['login']);
         //echo "user_login: ". $user['login'];
-        if (password_verify($user['password'], $_COOKIE['hash'])) return $user;
+        if (password_verify($user['password'], $_COOKIE['hash'])) {
+            setcookie ("login", $user['login'], time() + COOKIE_TIME);
+            setcookie ("hash", Model::cookieHash($user), time() + COOKIE_TIME);
+            $this->setLastTime($user['id']);
+            return $user;
+        }
         else {
             $this->pageData['error'] = 'Ошибка авторизации.';
             return false;
@@ -83,9 +88,9 @@ Class Controller
         $this->pageData['title'] = "Список картинок";
     }
 
-    public function view($page, $user) {
+    public function view($page, $user, $id = NULL) {
             $this->user = $user;
-            $this->$page();
+            $result = $this->$page($id);
             $pageData=$this->pageData;
             require_once("Views/".$pageData['tmpl'].'.tmpl.php');
     }
@@ -150,7 +155,7 @@ Class Controller
 
         $error = false;
 
-            if (isset($_FILES["userfile"])) {
+            if (isset($_FILES["userfile"]) && $this->user['id']) {
                 if (is_uploaded_file($_FILES['userfile']['tmp_name'])) {
                     $filename = $_FILES['userfile']['tmp_name'];
                     $hash = hash('sha256', file_get_contents($_FILES['userfile']['tmp_name']));
@@ -189,7 +194,7 @@ Class Controller
                                 $time = time();
                                 if (move_uploaded_file($filename, __DIR__ . "/../Uploads/" . $time . $_FILES['userfile']['name'])) {
                                     $this->pageData['file'] = $_FILES['userfile']['name'];
-                                    $this->pdo->query('insert into pics (path, author, hash, pubdate) values ("' . $time . $_FILES['userfile']['name'] . '", ' . $this->user['id'] . ', "' . $hash . '", UTC_TIMESTAMP())');
+                                    $this->pdo->query('insert into pics (path, author, hash, pubdate) values ("' . $time . $_FILES['userfile']['name'] . '", ' . $this->user['id'] . ', "' . $hash . '", now())');
                                     $this->pageData['success'] = 'Картинка успешно загружена!';
                                 } else {
                                     $this->pageData['error'] = 'Ошибка записи файла.';
@@ -206,5 +211,82 @@ Class Controller
 
         $this->pageData['tmpl'] = "uploadPic";
         $this->pageData['title'] = "Загрузить картинку";
+    }
+
+    public function viewPic ($id) {
+        $this->pageData['pic'] = $this->pdo->query('select *, pics.id as picid, users.id as uid from pics, users where pics.id = '.$id.' and users.id = pics.author limit 1')->fetch(\PDO::FETCH_ASSOC);
+        $this->pageData['comments'] = $this->pdo->query('select *, comments.id as cid from comments, users where pic = '.$id.' and edited=0 and users.id = comments.user')->fetchAll(\PDO::FETCH_ASSOC);
+        $this->pageData['tmpl'] = "viewPic";
+        $this->pageData['title'] = "Просмотр картинки";
+        $this->pdo->query('update pics set viewcount = viewcount + 1 where id='.$this->pageData['pic']['picid'].' limit 1');
+        //echo date_default_timezone_get().'<br>'.time().'<br>'.strtotime($this->pageData['pic']['pubdate']);
+    }
+
+    public function addComment () {
+        if (!preg_match('/((?<![а-я])(лес|поляна|озеро)(?![а-я]))/i', $_POST['commentform'])) {
+            $query = 'insert into comments (pic, user, comment) values (' . $_GET['id'] . ', ' . $this->user['id'] . ', "' . $_POST['commentform'] . '")';
+            $this->pdo->query($query);
+            $this->pageData['success'] = 'Комментарий добавлен.';
+        } else {
+            $this->pageData['error'] = 'Ошибка. Запрещенные слова.';
+        }
+        $this->viewPic($_GET['id']);
+        $this->pageData['tmpl'] = 'viewPic';
+    }
+
+    public function editComment() {
+        $query = 'select * from comments where id = '.$_GET['id'] . ' limit 1';
+        $comment = $this->pdo->query($query)->fetch(\PDO::FETCH_ASSOC);
+        $query = 'select * from comments where base = '.$comment['base'] . ' limit 1';
+        $commentfirst = $this->pdo->query($query)->fetch(\PDO::FETCH_ASSOC);
+        if (strtotime($commentfirst['pubdate']) >= time() - 5 * 60 && $this->user['id'] == $comment['user']) {
+            $this->pageData['comment'] = $comment;
+            $this->pageData['tmpl'] = "editComment";
+            $this->pageData['title'] = "Редактирование комментария";
+        } else {
+            $this->pageData['error'] = 'Ошибка. Редактирование недоступно.';
+            $this->viewPic($comment['pic']);
+            $this->pageData['tmpl'] = 'viewPic';
+        }
+   }
+
+    public function saveComment () {
+        $comment = $this->pdo->query('select * from comments where id='.$_GET['id'])->fetch(\PDO::FETCH_ASSOC);
+        if (!preg_match('/((?<![а-я])(лес|поляна|озеро)(?![а-я]))/i', $_POST['commentform'])) {
+            $query = 'insert into comments (pic, user, comment, parent, base) values (' . $comment['pic'] . ', ' . $this->user['id'] . ', "' . $_POST['commentform'] . '", '.$_GET['id'].', '.$comment['base'].')';
+            $this->pdo->query($query);
+            $query = 'update comments set edited=1 where id='.$comment['id'];
+            $this->pdo->query($query);
+            $this->pageData['success'] = 'Комментарий изменен.';
+        } else {
+            $this->pageData['error'] = 'Ошибка. Запрещенные слова.';
+        }
+        $this->viewPic($comment['pic']);
+        $this->pageData['tmpl'] = 'viewPic';
+    }
+
+    public function History () {
+        $query = 'select *, users.id as uid, comments.id as commid from comments, users where base='.$_GET['id'].' and users.id = comments.user and users.id='.$this->user['id'];
+        $comments = $this->pdo->query($query)->fetchAll(\PDO::FETCH_ASSOC);
+        $this->pageData['tmpl'] = 'history';
+        $this->pageData['comments'] = $comments;
+        $this->pageData['title'] = "История комментария";
+    }
+
+    public function deleteComment() {
+        $query = 'select * from comments where base='.$_GET['id'].' limit 1';
+        $comment = $this->pdo->query($query)->fetch(\PDO::FETCH_ASSOC);;
+
+        if ($comment['user'] == $this->user['id']) {
+            $query = 'delete from comments where base='.$_GET['id'];
+            $this->pdo->query($query);
+            $this->pageData['success'] = 'Комментарий удален.';
+            $this->viewPic($comment['pic']);
+            $this->pageData['tmpl'] = 'viewPic';
+        } else {
+            $this->pageData['error'] = 'Удалить можно только ваш комментарий.';
+            $this->viewPic($comment['pic']);
+            $this->pageData['tmpl'] = 'viewPic';
+        }
     }
 }
